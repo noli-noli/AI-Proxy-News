@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI‑Proxy‑News</title>
+
+<!-- Google Font -->
+<link rel="preconnect" href="https://fonts.gstatic.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ========== DESIGN TOKENS ========== */
+:root{
+  /* 基調色 */
+  --c-bg:#f7f8fa;
+  --c-surface:#ffffff;
+  --c-stroke:#e3e6ee;
+  --c-text:#222e3e;
+  --c-text-sub:#6b7280;
+
+  /* アクセント */
+  --grad-from:#835afd;     /* Electric Purple */
+  --grad-to:#18c8ff;       /* Soft Cyan */
+  --c-accent:#6f7afe;      /* 固定色で使う場面も */
+
+  /* 成功・状態 */
+  --c-success:#05c46b;
+
+  /* サイズ */
+  --rad-lg:24px;
+  --rad-sm:14px;
+  --shadow:0 8px 26px rgba(0,0,0,.08);
+  --shadow-hi:0 14px 46px rgba(0,0,0,.12);
+
+  --font:'Sora',system-ui,sans-serif;
+  --tr-fast:.15s ease;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:var(--font)}
+body{min-height:100vh;background:var(--c-bg);color:var(--c-text);-webkit-font-smoothing:antialiased}
+
+/* ========== HEADER ========== */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  height:80px;padding:0 40px;background:var(--c-surface);border-bottom:1px solid var(--c-stroke);
+  position:sticky;top:0;z-index:20;
+}
+.brand{
+  display:flex;align-items:center;gap:18px;
+}
+.logo{
+  width:56px;height:56px;border-radius:18px;
+  background:linear-gradient(130deg,var(--grad-from),var(--grad-to));
+  display:grid;place-items:center;font-weight:700;font-size:20px;color:#fff;
+  box-shadow:0 0 0 4px #fff inset,0 4px 14px rgba(99,102,241,.32);
+}
+.brand h1{font-size:24px;font-weight:700}
+.badge{
+  display:flex;align-items:center;gap:8px;padding:4px 18px;
+  background:#eef2ff;border-radius:999px;font-size:14px;color:var(--c-accent);
+}
+.badge .dot{width:10px;height:10px;border-radius:50%;background:#c4c8ff}
+.badge.live .dot{background:var(--c-accent);box-shadow:0 0 6px var(--c-accent)}
+
+.btn{
+  height:48px;padding:0 28px;border:none;border-radius:var(--rad-sm);cursor:pointer;font-weight:600;font-size:15px;
+  display:inline-flex;align-items:center;gap:8px;transition:var(--tr-fast)
+}
+.btn.primary{
+  background:linear-gradient(135deg,var(--grad-from),var(--grad-to));color:#fff;box-shadow:var(--shadow-hi)
+}
+.btn.primary:hover{opacity:.9;transform:translateY(-2px)}
+.btn.secondary{
+  background:var(--c-surface);border:1px solid var(--c-stroke);color:var(--c-text)
+}
+.btn.secondary:hover{background:#f2f3f7}
+
+.ctrls{display:flex;align-items:center;gap:18px}
+
+/* ========== LAYOUT ========== */
+main{
+  max-width:960px;margin:40px auto;padding:0 20px;display:grid;gap:32px;
+}
+.card{
+  background:var(--c-surface);border:1px solid var(--c-stroke);border-radius:var(--rad-lg);
+  box-shadow:var(--shadow-hi);padding:36px;display:grid;gap:32px
+}
+
+/* Audio Row */
+.row{display:flex;flex-wrap:wrap;gap:26px}
+label{font-weight:600;font-size:15px;color:var(--c-text-sub);margin-bottom:8px;display:block}
+select{
+  width:100%;padding:14px 18px;border:1px solid var(--c-stroke);border-radius:var(--rad-sm);
+  background:#f1f4fa;font-size:15px;color:var(--c-text);transition:var(--tr-fast)
+}
+select:focus{outline:none;border-color:var(--c-accent);box-shadow:0 0 0 2px rgba(99,102,241,.25)}
+
+.level{
+  height:14px;border:1px solid var(--c-stroke);border-radius:999px;background:#e8ecf3;overflow:hidden
+}
+.level>div{height:100%;width:0%;background:linear-gradient(90deg,#7efac7,var(--c-success))}
+
+/* Wave Canvas Placeholder */
+.wave{
+  height:108px;border:2px dashed var(--c-stroke);border-radius:var(--rad-sm);
+  display:grid;place-items:center;color:var(--c-text-sub);font-size:14px
+}
+
+/* STT Indicator */
+.ledWrap{display:flex;align-items:center;gap:14px}
+.led{
+  width:18px;height:18px;border-radius:50%;background:#cdd1de;transition:var(--tr-fast)
+}
+.led.on{background:var(--c-success);box-shadow:0 0 8px rgba(5,196,107,.7)}
+.statusText{font-size:15px}
+
+/* Question */
+.question{
+  padding:28px;border-radius:var(--rad-sm);
+  background:#f5f7ff;border:1px solid #d9dffd;
+  font-size:24px;font-weight:600;line-height:1.5;color:#1c2b55
+}
+.actions{display:flex;flex-wrap:wrap;gap:18px}
+
+/* ========== Drawer ========== */
+.backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:30;
+}
+.drawer{
+  position:fixed;top:0;right:0;width:min(500px,100%);height:100%;
+  background:var(--c-surface);border-left:1px solid var(--c-stroke);box-shadow:-16px 0 34px rgba(0,0,0,.1);
+  transform:translateX(100%);transition:var(--tr-fast);z-index:40;display:flex;flex-direction:column
+}
+.drawer.open{transform:translateX(0)}
+.drawer-head{
+  display:flex;align-items:center;gap:18px;padding:28px;border-bottom:1px solid var(--c-stroke)
+}
+.drawer-head h3{font-size:20px;font-weight:600}
+.drawer-body{padding:28px;overflow:auto;display:grid;gap:22px}
+.evi{
+  background:#f8f9fd;border:1px solid var(--c-stroke);border-radius:var(--rad-sm);padding:20px;font-size:15px
+}
+
+/* Responsive */
+@media(max-width:600px){
+  .row>*{flex:1 1 100%}
+  .actions .btn{flex:1 0 calc(50% - 9px)}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="brand">
+    <div class="logo">APN</div>
+    <h1>AI‑Proxy‑News</h1>
+  </div>
+
+  <div class="ctrls">
+    <div class="badge" id="badge"><span class="dot"></span><span>Idle</span></div>
+    <button class="btn primary" id="start">Start</button>
+    <button class="btn secondary" id="stop">Stop</button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+  <section class="card">
+    <!-- AUDIO & LANG -->
+    <div class="row">
+      <div style="flex:1 1 240px">
+        <label>Input Level</label>
+        <div class="level"><div id="meter"></div></div>
+      </div>
+      <div style="flex:1 1 240px">
+        <label>Language</label>
+        <select disabled><option>Auto Detect (ja/en)</option></select>
+      </div>
+    </div>
+
+    <!-- WAVE PLACEHOLDER -->
+    <div class="wave">Waveform Preview</div>
+
+    <!-- STT INDICATOR -->
+    <div>
+      <label>Speech‑to‑Text Status</label>
+      <div class="ledWrap"><div class="led" id="led"></div><span class="statusText" id="sttTxt">Waiting…</span></div>
+    </div>
+
+    <!-- QUESTION -->
+    <div>
+      <label>Current Question (AI)</label>
+      <div class="question" id="q">…</div>
+      <div class="actions">
+        <button class="btn primary">Send</button>
+        <button class="btn secondary">Dig Deeper</button>
+        <button class="btn secondary">Rephrase</button>
+        <button class="btn secondary">Skip</button>
+        <button class="btn secondary" id="evBtn">Evidence</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- DRAWER -->
+<div class="backdrop" id="back"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h3>Evidence / Context</h3>
+    <button class="btn secondary" id="close">Close</button>
+  </div>
+  <div class="drawer-body">
+    <div class="evi">Hit #1 — Lorem ipsum dolor sit amet…</div>
+    <div class="evi">Hit #2 — Consectetur adipiscing elit…</div>
+  </div>
+</aside>
+
+<!-- DEMO JS -->
+<script>
+/* Fake input‑level meter */
+const meter=document.getElementById('meter');setInterval(()=>meter.style.width=Math.random()*100+'%',100);
+
+/* Fake STT LED */
+const led=document.getElementById('led'),txt=document.getElementById('sttTxt');let on=false;
+setInterval(()=>{on=!on;led.classList.toggle('on',on);txt.textContent=on?'Transcribing…':'Waiting…'},2400);
+
+/* Drawer toggle */
+const back=document.getElementById('back'),drawer=document.getElementById('drawer');
+document.getElementById('evBtn').onclick=()=>{back.style.display='block';drawer.classList.add('open')};
+const close=()=>{drawer.classList.remove('open');back.style.display='none'};
+document.getElementById('close').onclick=close;back.onclick=close;
+</script>
+</body>
+</html>

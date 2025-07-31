@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI‑Proxy‑News</title>
+
+<!-- Google Fonts – Poppins -->
+<link rel="preconnect" href="https://fonts.gstatic.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ===== Light‑Pastel Design Tokens ===== */
+:root{
+  --clr-bg:#fafcff;
+  --clr-surface:#ffffff;
+  --clr-stroke:#dde3ea;
+  --clr-text:#1f2a37;
+  --clr-text-sub:#6b7280;
+  --clr-primary:#00b3b0;           /* ティールグリーン */
+  --clr-primary-dark:#018d8b;
+  --clr-success:#28c76f;
+  --radius-lg:20px;
+  --radius-sm:12px;
+  --shadow:0 6px 20px rgba(31,42,55,.12);
+  --shadow-high:0 12px 32px rgba(31,42,55,.15);
+  --transition:.16s ease;
+  --font:'Poppins',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:var(--font)}
+body{min-height:100vh;background:var(--clr-bg);color:var(--clr-text)}
+
+/* ===== Header ===== */
+header{
+  height:72px;display:flex;align-items:center;gap:20px;padding:0 36px;
+  background:var(--clr-surface);border-bottom:1px solid var(--clr-stroke);
+  position:sticky;top:0;z-index:20
+}
+.logo{
+  width:50px;height:50px;border-radius:16px;display:grid;place-items:center;
+  background:linear-gradient(145deg,#8ef2ef 0%,#47c9c6 100%);
+  font-weight:700;font-size:19px;color:#014d4c;letter-spacing:.5px;box-shadow:var(--shadow)
+}
+h1{font-size:23px;font-weight:700}
+.sub{font-size:14px;color:var(--clr-text-sub)}
+.badge{
+  display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 16px;
+  border-radius:999px;font-size:13px;border:1px solid var(--clr-stroke);background:#f2f8f8
+}
+.badge .dot{width:8px;height:8px;border-radius:50%;background:#c5ccd3}
+.badge.live .dot{background:var(--clr-primary)}
+.btn{
+  height:44px;padding:0 26px;border:none;border-radius:var(--radius-sm);cursor:pointer;
+  font-weight:600;font-size:15px;display:inline-flex;align-items:center;gap:6px;
+  transition:var(--transition);box-shadow:var(--shadow)
+}
+.btn.primary{
+  background:var(--clr-primary);color:#fff
+}
+.btn.primary:hover{background:var(--clr-primary-dark)}
+.btn.secondary{
+  background:var(--clr-surface);color:var(--clr-text);border:1px solid var(--clr-stroke)
+}
+.btn.secondary:hover{background:#f2f6f6}
+
+/* ===== Layout ===== */
+.wrap{max-width:960px;margin:0 auto;padding:32px;display:grid;gap:32px}
+.card{
+  background:var(--clr-surface);border:1px solid var(--clr-stroke);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-high)
+}
+.card h2{
+  margin:0;padding:26px;font-size:20px;font-weight:600;border-bottom:1px solid var(--clr-stroke)
+}
+.card-body{padding:28px;display:grid;gap:26px}
+
+label{display:block;margin-bottom:6px;font-weight:600;color:var(--clr-text-sub);font-size:14px}
+select{
+  width:100%;padding:12px 16px;border:1px solid var(--clr-stroke);
+  border-radius:var(--radius-sm);font-size:15px;background:#f7f9fa;
+  color:var(--clr-text);transition:var(--transition)
+}
+select:focus{outline:none;border-color:var(--clr-primary);box-shadow:0 0 0 2px rgba(0,179,176,.25)}
+
+.row{display:flex;gap:24px;flex-wrap:wrap}
+
+.level{
+  height:12px;border-radius:999px;background:#e3e9ef;border:1px solid var(--clr-stroke);overflow:hidden
+}
+.level>div{height:100%;width:0%;background:linear-gradient(90deg,#74e4e0 0%,#00b3b0 100%)}
+.wave{
+  height:96px;border-radius:var(--radius-sm);background:#f1f4f9;border:2px dashed var(--clr-stroke);
+  display:grid;place-items:center;color:var(--clr-text-sub);font-size:14px
+}
+.ledBox{display:flex;align-items:center;gap:12px}
+.led{
+  width:16px;height:16px;border-radius:50%;background:#c5ccd3;
+  transition:var(--transition)
+}
+.led.on{background:var(--clr-success);box-shadow:0 0 6px rgba(40,199,111,.6)}
+.question{
+  padding:24px;border-radius:var(--radius-sm);background:#f7f9fa;border:1px solid var(--clr-stroke);
+  font-size:22px;font-weight:600;line-height:1.45;color:#18324a
+}
+.actions{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
+
+/* ===== Drawer ===== */
+.backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:30
+}
+.drawer{
+  position:fixed;top:0;right:0;width:min(460px,100%);height:100%;background:var(--clr-surface);
+  border-left:1px solid var(--clr-stroke);box-shadow:-12px 0 24px rgba(31,42,55,.12);
+  transform:translateX(100%);transition:var(--transition);z-index:40;display:flex;flex-direction:column
+}
+.drawer.open{transform:translateX(0)}
+.drawer-head{display:flex;align-items:center;gap:16px;padding:24px;border-bottom:1px solid var(--clr-stroke)}
+.drawer-head h3{margin:0;font-size:18px;font-weight:600}
+.drawer-body{padding:24px;overflow:auto;display:grid;gap:20px}
+.box{
+  background:#f7f9fa;border:1px solid var(--clr-stroke);border-radius:var(--radius-sm);
+  padding:18px;color:#374151;font-size:14px
+}
+footer{text-align:center;padding:34px;color:var(--clr-text-sub);font-size:14px}
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header>
+  <div class="logo">APN</div>
+  <div>
+    <h1>AI‑Proxy‑News</h1>
+    <div class="sub">Interview Assist Platform</div>
+  </div>
+
+  <div class="badge" id="badge"><span class="dot"></span><span>Idle</span></div>
+  <button class="btn primary" id="start">Start</button>
+  <button class="btn secondary" id="stop">Stop</button>
+</header>
+
+<!-- ===== Main ===== -->
+<main class="wrap">
+  <section class="card">
+    <h2>Live Session</h2>
+    <div class="card-body">
+
+      <!-- Audio & Language -->
+      <div class="row">
+        <div style="flex:1 1 240px">
+          <label>Input Level</label>
+          <div class="level"><div id="lv"></div></div>
+        </div>
+        <div style="flex:1 1 240px">
+          <label>Language</label>
+          <select disabled><option>Auto Detect (ja/en)</option></select>
+        </div>
+      </div>
+
+      <!-- Wave canvas placeholder -->
+      <div class="wave">Wave Preview / Waveform</div>
+
+      <!-- STT indicator -->
+      <div>
+        <label>Speech‑to‑Text Status</label>
+        <div class="ledBox"><div class="led" id="led"></div><span id="sttTxt">Disconnected</span></div>
+      </div>
+
+      <!-- Question -->
+      <div>
+        <label>Current Question (AI)</label>
+        <div class="question" id="q">…</div>
+        <div class="actions">
+          <button class="btn primary">Send</button>
+          <button class="btn secondary">Dig Deeper</button>
+          <button class="btn secondary">Rephrase</button>
+          <button class="btn secondary">Skip</button>
+          <button class="btn secondary" id="evBtn">Evidence</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<!-- ===== Drawer ===== -->
+<div class="backdrop" id="back"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h3>Evidence / Context</h3>
+    <button class="btn secondary" id="close">Close</button>
+  </div>
+  <div class="drawer-body">
+    <div class="box">Hit #1 — …</div>
+    <div class="box">Hit #2 — …</div>
+  </div>
+</aside>
+
+<footer>© 2025 AI‑Proxy‑News</footer>
+
+<!-- ===== Demo JS (mock) ===== -->
+<script>
+/* Fake audio level */
+const lv=document.getElementById('lv');setInterval(()=>{lv.style.width=Math.random()*100+'%'},90);
+/* Fake STT indicator */
+const led=document.getElementById('led'),txt=document.getElementById('sttTxt');let on=false;
+setInterval(()=>{on=!on;led.classList.toggle('on',on);txt.textContent=on?'Transcribing…':'Waiting';},2300);
+
+/* Drawer toggle */
+const back=document.getElementById('back'),drawer=document.getElementById('drawer');
+document.getElementById('evBtn').onclick=()=>{back.style.display='block';drawer.classList.add('open')};
+const close=()=>{drawer.classList.remove('open');back.style.display='none'};
+document.getElementById('close').onclick=close;back.onclick=close;
+</script>
+</body>
+</html>

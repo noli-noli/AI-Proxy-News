@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI‑Proxy‑News</title>
+
+<link rel="preconnect" href="https://fonts.gstatic.com">
+<link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ===== Design Tokens ===== */
+:root{
+  /* 基調色 */
+  --bg-1:#0b111a;          /* 背景（最奥） */
+  --bg-2:#121b26;          /* パネル内 */
+  --stroke:#263141;        /* 境界線 */
+  --txt-main:#f2f6fa;      /* メイン文字 */
+  --txt-sub:#a8b2c3;       /* サブ文字 */
+  --accent-from:#0fd8ff;   /* シアン → ブルー グラデ */
+  --accent-to:#0072ff;
+  --success:#14d683;
+
+  /* 効果 */
+  --rad-lg:18px; --rad-sm:12px;
+  --shadow-hi:0 14px 36px rgba(0,0,0,.55);
+  --glass:blur(8px);
+  --trans-fast:.15s cubic-bezier(.4,.14,.22,1);
+}
+
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Urbanist',system-ui,sans-serif}
+body{
+  min-height:100vh;
+  background:radial-gradient(circle at 50% -20%,#152032 0%,#0b111a 70%);
+  color:var(--txt-main);
+}
+
+/* ===== Header ===== */
+header{
+  height:74px;display:flex;align-items:center;gap:20px;padding:0 34px;
+  border-bottom:1px solid var(--stroke);
+  backdrop-filter:var(--glass);position:sticky;top:0;z-index:30;
+}
+.logo{
+  width:52px;height:52px;border-radius:14px;
+  background:linear-gradient(135deg,var(--accent-from),var(--accent-to));
+  display:grid;place-items:center;font-weight:700;font-size:20px;letter-spacing:.5px;
+  color:#002642;box-shadow:0 0 14px rgba(0,114,255,.5);
+}
+h1{font-size:24px;font-weight:700}
+.sub{font-size:14px;color:var(--txt-sub)}
+.badge{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 16px;border-radius:999px;font-size:13px;
+  background:rgba(0,114,255,.12);border:1px solid rgba(15,216,255,.35);
+  color:var(--accent-from);backdrop-filter:var(--glass)
+}
+.badge .dot{
+  width:8px;height:8px;border-radius:50%;background:#4b5563;
+}
+.badge.live .dot{background:var(--accent-from);box-shadow:0 0 6px var(--accent-from)}
+.btn{
+  height:46px;padding:0 24px;border:none;border-radius:var(--rad-sm);cursor:pointer;
+  font-weight:600;font-size:15px;display:inline-flex;align-items:center;gap:6px;
+  transition:var(--trans-fast)
+}
+.btn.pri{
+  background:linear-gradient(135deg,var(--accent-from),var(--accent-to));
+  color:#fff;box-shadow:0 4px 14px rgba(0,114,255,.4);
+}
+.btn.sec{
+  background:#1b2433;border:1px solid var(--stroke);color:var(--txt-main);
+}
+.btn:hover{filter:brightness(1.1);transform:translateY(-2px)}
+.btn:active{transform:none;box-shadow:none}
+
+/* ===== Layout ===== */
+.wrap{max-width:980px;margin:0 auto;padding:32px;display:grid;gap:32px}
+
+.panel{
+  background:var(--bg-2);border:1px solid var(--stroke);border-radius:var(--rad-lg);
+  box-shadow:var(--shadow-hi);backdrop-filter:var(--glass)
+}
+.panel h2{
+  margin:0;padding:26px;font-size:20px;font-weight:700;
+  border-bottom:1px solid var(--stroke);background:#101826;border-top-left-radius:inherit;border-top-right-radius:inherit
+}
+.inner{padding:28px;display:grid;gap:26px}
+
+label{font-size:14px;font-weight:600;color:var(--txt-sub);margin-bottom:6px;display:block}
+select{
+  width:100%;background:#1e2736;color:var(--txt-main);
+  border:1px solid #3a4658;border-radius:var(--rad-sm);padding:12px 16px;font-size:15px;
+  transition:var(--trans-fast)
+}
+select:focus{outline:none;border-color:var(--accent-from);box-shadow:0 0 0 2px rgba(15,216,255,.35)}
+
+.row{display:flex;gap:24px;flex-wrap:wrap}
+
+.level{
+  height:12px;border-radius:999px;background:#1f2836;border:1px solid var(--stroke);overflow:hidden
+}
+.level>div{height:100%;width:0%;background:linear-gradient(90deg,var(--success),var(--accent-from))}
+.wave{
+  height:94px;border-radius:var(--rad-sm);border:1px solid var(--stroke);
+  background:linear-gradient( to bottom,#112233 0%,#0e1621 100%);
+  background-size:280px 100%;mask-image:linear-gradient(to right,#0000 0%,#000 6%,#000 94%,#0000 100%);
+}
+
+.bigq{
+  padding:22px 24px;border-radius:var(--rad-sm);
+  background:rgba(0,0,0,.25);border:1px solid #2a3545;
+  backdrop-filter:var(--glass);
+  font-size:23px;font-weight:700;color:#d4e3ff;
+  box-shadow:inset 0 0 8px #0006
+}
+.actions{display:flex;gap:16px;flex-wrap:wrap}
+
+/* STT Indicator */
+.sttBox{display:flex;align-items:center;gap:16px}
+.led{
+  width:16px;height:16px;border-radius:50%;background:#56606d;transition:var(--trans-fast)
+}
+.led.on{background:var(--success);box-shadow:0 0 10px rgba(20,214,131,.9)}
+/* Drawer */
+.back{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:var(--glass);display:none;z-index:40}
+.drawer{
+  position:fixed;top:0;right:0;height:100%;width:min(520px,100%);
+  background:var(--bg-2);border-left:1px solid var(--stroke);box-shadow:-24px 0 50px rgba(0,0,0,.6);
+  transform:translateX(100%);transition:.3s var(--trans-fast);z-index:50;display:flex;flex-direction:column
+}
+.drawer.open{transform:translateX(0)}
+.drawerHead{display:flex;align-items:center;gap:14px;padding:24px;border-bottom:1px solid var(--stroke);background:#101826}
+.drawerHead h3{margin:0;font-size:20px}
+.drawerBody{padding:24px;overflow:auto;display:grid;gap:20px}
+.box{background:#101720;border:1px solid var(--stroke);border-radius:var(--rad-sm);padding:18px}
+footer{text-align:center;padding:32px;color:var(--txt-sub);font-size:14px}
+</style>
+</head>
+
+<body>
+<!-- ===== Header ===== -->
+<header>
+  <div class="logo">APN</div>
+  <div><h1>AI‑Proxy‑News</h1><div class="sub">Interview Assist Platform</div></div>
+  <div class="badge" id="badge"><span class="dot"></span><span>Idle</span></div>
+  <button class="btn pri" id="start">Start</button>
+  <button class="btn sec" id="stop">Stop</button>
+</header>
+
+<!-- ===== Main ===== -->
+<main class="wrap">
+  <section class="panel">
+    <h2>Live Session</h2>
+    <div class="inner">
+
+      <!-- Audio & Language -->
+      <div class="row">
+        <div style="flex:1 1 260px">
+          <label>Input Level</label>
+          <div class="level"><div id="lv"></div></div>
+        </div>
+        <div style="flex:1 1 260px">
+          <label>Language</label>
+          <select disabled><option>Auto Detect (ja / en)</option></select>
+        </div>
+      </div>
+
+      <!-- Wave placeholder -->
+      <div class="wave"></div>
+
+      <!-- STT Indicator -->
+      <div>
+        <label>Speech‑to‑Text Status</label>
+        <div class="sttBox">
+          <div class="led" id="led"></div>
+          <div id="sttText" style="font-size:15px">Disconnected</div>
+        </div>
+      </div>
+
+      <!-- Question -->
+      <div>
+        <label>Current Question (AI)</label>
+        <div class="bigq" id="q">…</div>
+        <div class="actions">
+          <button class="btn pri">Send</button>
+          <button class="btn sec">Dig Deeper</button>
+          <button class="btn sec">Rephrase</button>
+          <button class="btn sec">Skip</button>
+          <button class="btn sec" id="evBtn">Evidence</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<!-- ===== Drawer: Evidence ===== -->
+<div class="back" id="back"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawerHead">
+    <h3>Evidence / Context</h3>
+    <button class="btn sec" id="close">Close</button>
+  </div>
+  <div class="drawerBody" id="evBody">
+    <div class="box">Hit #1 — …</div>
+    <div class="box">Hit #2 — …</div>
+  </div>
+</aside>
+
+<footer>© 2025 AI‑Proxy‑News</footer>
+
+<script>
+/* ===== Demo Interactions (Mock) ===== */
+const lv=document.getElementById('lv');setInterval(()=>lv.style.width=Math.random()*100+'%',90);
+
+/* STT LED */
+const led=document.getElementById('led'),stt=document.getElementById('sttText');let on=false;
+setInterval(()=>{on=!on;led.classList.toggle('on',on);stt.textContent=on?'Transcribing…':'Waiting';},2200);
+
+/* Drawer control */
+const back=document.getElementById('back'),drawer=document.getElementById('drawer');
+const open=()=>{back.style.display='block';drawer.classList.add('open')};
+const close=()=>{drawer.classList.remove('open');back.style.display='none'};
+document.getElementById('evBtn').onclick=open;document.getElementById('close').onclick=close;back.onclick=close;
+</script>
+</body>
+</html>
