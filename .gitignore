@@ -1,6 +1,7 @@
 .env
 .pyc
 .csv
-.
+
+__pycache__
 
 ai-proxy-news-96766912b0c2.json
