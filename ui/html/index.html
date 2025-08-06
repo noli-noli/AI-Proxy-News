@@ -135,13 +135,12 @@ select:focus{outline:none;border-color:var(--accent-from);box-shadow:0 0 0 2px r
 .box{background:#101720;border:1px solid var(--stroke);border-radius:var(--rad-sm);padding:18px}
 footer{text-align:center;padding:32px;color:var(--txt-sub);font-size:14px}
 </style>
-</head>
 
 <body>
 <!-- ===== Header ===== -->
 <header>
   <div class="logo">APN</div>
-  <div><h1>AI‑Proxy‑News</h1><div class="sub">Interview Assist Platform</div></div>
+  <div><h1>AI-Proxy-News</h1><div class="sub">Interview Assist Platform</div></div>
   <div class="badge" id="badge"><span class="dot"></span><span>Idle</span></div>
   <button class="btn pri" id="start">Start</button>
   <button class="btn sec" id="stop">Stop</button>
@@ -156,12 +155,12 @@ footer{text-align:center;padding:32px;color:var(--txt-sub);font-size:14px}
       <!-- Audio & Language -->
       <div class="row">
         <div style="flex:1 1 260px">
-          <label>Input Level</label>
+          <label>Input Level</label>
           <div class="level"><div id="lv"></div></div>
         </div>
         <div style="flex:1 1 260px">
           <label>Language</label>
-          <select disabled><option>Auto Detect (ja / en)</option></select>
+          <select disabled><option>Auto Detect (ja / en)</option></select>
         </div>
       </div>
 
@@ -170,20 +169,26 @@ footer{text-align:center;padding:32px;color:var(--txt-sub);font-size:14px}
 
       <!-- STT Indicator -->
       <div>
-        <label>Speech‑to‑Text Status</label>
+        <label>Speech-to-Text Status</label>
         <div class="sttBox">
           <div class="led" id="led"></div>
           <div id="sttText" style="font-size:15px">Disconnected</div>
         </div>
       </div>
 
+      <!-- Live Transcript -->
+      <div>
+        <label>Transcript</label>
+        <div id="transOut" class="trans">…</div>
+      </div>
+
       <!-- Question -->
       <div>
-        <label>Current Question (AI)</label>
+        <label>Current Question (AI)</label>
         <div class="bigq" id="q">…</div>
         <div class="actions">
           <button class="btn pri">Send</button>
-          <button class="btn sec">Dig Deeper</button>
+          <button class="btn sec">Dig Deeper</button>
           <button class="btn sec">Rephrase</button>
           <button class="btn sec">Skip</button>
           <button class="btn sec" id="evBtn">Evidence</button>
@@ -198,30 +203,83 @@ footer{text-align:center;padding:32px;color:var(--txt-sub);font-size:14px}
 <div class="back" id="back"></div>
 <aside class="drawer" id="drawer">
   <div class="drawerHead">
-    <h3>Evidence / Context</h3>
+    <h3>Evidence / Context</h3>
     <button class="btn sec" id="close">Close</button>
   </div>
-  <div class="drawerBody" id="evBody">
-    <div class="box">Hit #1 — …</div>
-    <div class="box">Hit #2 — …</div>
-  </div>
+  <div class="drawerBody" id="evBody"></div>
 </aside>
 
-<footer>© 2025 AI‑Proxy‑News</footer>
+<footer>© 2025 AI-Proxy-News</footer>
 
 <script>
-/* ===== Demo Interactions (Mock) ===== */
-const lv=document.getElementById('lv');setInterval(()=>lv.style.width=Math.random()*100+'%',90);
+/* ------- DOM refs ------- */
+const led   = document.getElementById('led');
+const stt   = document.getElementById('sttText');
+const badge = document.getElementById('badge');
+const btnS  = document.getElementById('start');
+const btnP  = document.getElementById('stop');
+const trans = document.getElementById('transOut');
+const lvBar = document.getElementById('lv');
 
-/* STT LED */
-const led=document.getElementById('led'),stt=document.getElementById('sttText');let on=false;
-setInterval(()=>{on=!on;led.classList.toggle('on',on);stt.textContent=on?'Transcribing…':'Waiting';},2200);
+/* ------- REST helpers ------- */
+async function api(path,opt={method:'GET'}){
+  const r = await fetch(path, opt);
+  if(!r.ok) throw await r.json();
+  return r.json();
+}
 
-/* Drawer control */
+/* ------- UI state helper ------- */
+function setState(running){
+  led.classList.toggle('on',running);
+  stt.textContent = running ? 'Transcribing…':'Disconnected';
+  badge.classList.toggle('live',running);
+  badge.lastElementChild.textContent = running ? 'Live':'Idle';
+  btnS.disabled = running;
+  btnP.disabled = !running;
+}
+
+/* ------- Pull loop ------- */
+let timer=null;
+async function pullLoop(){
+  clearInterval(timer);
+  timer=setInterval(async ()=>{
+    try{
+      const {lines}=await api('/pull');
+      if(lines.length){
+        lines.forEach(l=>{
+          trans.textContent+= (trans.textContent==='…'? '' : '\n')+l;
+          trans.scrollTop=trans.scrollHeight;
+        });
+      }
+      const st=await api('/status');
+      if(!st.running){clearInterval(timer);setState(false);}
+    }catch(e){console.error(e);}
+  },1500);
+}
+
+/* ------- Buttons ------- */
+btnS.onclick=async()=>{
+  try{
+    await api('/start',{method:'POST'});
+    trans.textContent='…';
+    setState(true);
+    pullLoop();
+  }catch(e){alert(e.msg||'already running')}
+};
+btnP.onclick=async()=>{
+  await api('/stop',{method:'POST'});
+  clearInterval(timer);timer=null;
+  setState(false);
+};
+
+/* ------- Drawer (Evidence) demo ------- */
 const back=document.getElementById('back'),drawer=document.getElementById('drawer');
-const open=()=>{back.style.display='block';drawer.classList.add('open')};
-const close=()=>{drawer.classList.remove('open');back.style.display='none'};
-document.getElementById('evBtn').onclick=open;document.getElementById('close').onclick=close;back.onclick=close;
+document.getElementById('evBtn').onclick=()=>{back.style.opacity=1;back.style.pointerEvents='auto';drawer.style.right='0'};
+document.getElementById('close').onclick=()=>{back.style.opacity=0;back.style.pointerEvents='none';drawer.style.right='-380px'};
+back.onclick=()=>document.getElementById('close').click();
+
+/* ------- Dummy input-level animation ------- */
+setInterval(()=>{lvBar.style.width=(Math.random()*100|0)+'%';},120);
 </script>
 </body>
 </html>
