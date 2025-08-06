@@ -1,195 +1,123 @@
-# speech2text/api_client/speech2text_client.py
-# ===============================================================
-# Google Cloud Speech-to-Text v2  ストリーミングクライアント
-# ・マイク（pyaudio）→ API → 転写結果をリアルタイム表示／保存
-# ・ローカル音声ファイルのストリーミング転写もサポート
-# ・設定値／認証情報は .env で管理
-# ===============================================================
+"""
+stream_recognize_env.py  (モデル/言語切替版)
 
-import os
-import queue
-import threading
-from typing import Iterable, List, Callable, Optional
+依存:
+  pip install google-cloud-speech python-dotenv pyaudio
+  .env に GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
+"""
 
-import pyaudio             # マイク入力
+import os, sys, re, queue, argparse
 from dotenv import load_dotenv
-from google.cloud.speech_v2 import SpeechClient
-from google.cloud.speech_v2.types import cloud_speech as speech_types
+from google.cloud import speech
+import pyaudio
+
+# ---------- 環境変数読み込み ----------
+load_dotenv()
+
+# ---------- 定数 ----------
+RATE          = 16000
+CHUNK         = int(RATE / 10)   # 100 ms
+DEFAULT_MODEL = "latest_long"   # latest_short / latest_long / command_and_search ...
+DEFAULT_LANG  = "ja-JP"          # ja-JP で日本語
+TEXT_SAVE_DIR = "../save-texts/"
 
 
-class Speech2TextClient:
-    """Google Cloud Speech-to-Text v2 用クライアント"""
+if not os.path.exists(TEXT_SAVE_DIR):
+    os.makedirs(TEXT_SAVE_DIR)
+    
+# ---------- マイク入力 ----------
+class MicrophoneStream:
+    def __init__(self, rate=RATE, chunk=CHUNK):
+        self._rate, self._chunk = rate, chunk
+        self._buff = queue.Queue()
+        self.closed = True
 
-    # ------------------------------------------------------------------
-    # 初期化
-    # ------------------------------------------------------------------
-    def __init__(
-        self,
-        language_codes: List[str] = ("ja-JP",),   # 多言語なら複数与える
-        sample_rate: int = 16_000,
-        model: str = "chirp",                     # long / chirp など
-        enable_auto_decoding: bool = True,
-    ) -> None:
-        load_dotenv()  # .env を読み込む
-
-        # 必須環境変数
-        self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-        if not self.project_id:
-            raise EnvironmentError("GOOGLE_CLOUD_PROJECT が .env に設定されていません。")
-
-        # 認証は GOOGLE_APPLICATION_CREDENTIALS に依存（API キーも可）
-        self.client = SpeechClient()
-        self.recognizer_path = (
-            f"projects/{self.project_id}/locations/global/recognizers/_"
+    def __enter__(self):
+        self._audio_interface = pyaudio.PyAudio()
+        self._audio_stream = self._audio_interface.open(
+            format=pyaudio.paInt16, channels=1,
+            rate=self._rate, input=True,
+            frames_per_buffer=self._chunk,
+            stream_callback=self._fill_buffer,
         )
+        self.closed = False
+        return self
 
-        self.language_codes = list(language_codes)
-        self.sample_rate = sample_rate
-        self.model = model
-        self.enable_auto_decoding = enable_auto_decoding
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._audio_stream.stop_stream()
+        self._audio_stream.close()
+        self.closed = True
+        self._buff.put(None)
+        self._audio_interface.terminate()
 
-    # ------------------------------------------------------------------
-    # ストリーミング用リクエストジェネレータ
-    # ------------------------------------------------------------------
-    def _request_stream(
-        self, audio_generator: Iterable[bytes]
-    ) -> Iterable[speech_types.StreamingRecognizeRequest]:
-        """
-        1. 最初にストリーミング設定を送信
-        2. 続いて audio チャンクを順次送信
-        """
-        if self.enable_auto_decoding:
-            decoding_cfg = speech_types.AutoDetectDecodingConfig()
-            recognition_cfg = speech_types.RecognitionConfig(
-                auto_decoding_config=decoding_cfg,
-                language_codes=self.language_codes,
-                model=self.model,
-            )
+    def _fill_buffer(self, in_data, frame_count, time_info, status_flags):
+        self._buff.put(in_data)
+        return None, pyaudio.paContinue
+
+    def generator(self):
+        while not self.closed:
+            chunk = self._buff.get()
+            if chunk is None: return
+            data = [chunk]
+            while True:
+                try:
+                    chunk = self._buff.get(block=False)
+                    if chunk is None: return
+                    data.append(chunk)
+                except queue.Empty:
+                    break
+            yield b"".join(data)
+
+# ---------- 文字起こし結果表示 ----------
+def listen_print_loop(responses):
+    outfile = open(f"{TEXT_SAVE_DIR}transcript.txt", "a", encoding="utf-8")  # ★追記
+    num_chars_printed = 0
+    for response in responses:
+        if not response.results: continue
+        result = response.results[0]
+        if not result.alternatives: continue
+        transcript = result.alternatives[0].transcript
+        overwrite = " " * (num_chars_printed - len(transcript))
+
+        if not result.is_final:
+            sys.stdout.write(transcript + overwrite + "\r")
+            sys.stdout.flush()
+            num_chars_printed = len(transcript)
         else:
-            decoding_cfg = speech_types.DecodingConfig(
-                encoding=speech_types.DecodingConfig.AudioEncoding.LINEAR16,
-                sample_rate_hertz=self.sample_rate,
-            )
-            recognition_cfg = speech_types.RecognitionConfig(
-                decoding_config=decoding_cfg,
-                language_codes=self.language_codes,
-                model=self.model,
-            )
+            print(transcript + overwrite)
+            outfile.write(transcript + "\n")   # ★保存
+            outfile.flush()
+            if re.search(r"\b(exit|quit)\b", transcript, re.I):
+                print("Exiting.."); break
+            num_chars_printed = 0
 
-        streaming_cfg = speech_types.StreamingRecognitionConfig(
-            config=recognition_cfg
-        )
+# ---------- メイン ----------
+def main():
+    parser = argparse.ArgumentParser(description="GCP Speech-to-Text streaming demo")
+    parser.add_argument("--model", default=DEFAULT_MODEL,
+                        help=f"使用モデル (default: {DEFAULT_MODEL})")
+    parser.add_argument("--lang", default=DEFAULT_LANG,
+                        help=f"言語コード (default: {DEFAULT_LANG})")
+    args = parser.parse_args()
 
-        # ① 設定リクエスト
-        yield speech_types.StreamingRecognizeRequest(
-            recognizer=self.recognizer_path,
-            streaming_config=streaming_cfg,
-        )
+    client = speech.SpeechClient()
+    config = speech.RecognitionConfig(
+        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        sample_rate_hertz=RATE,
+        language_code=args.lang,
+        model=args.model,                  # ← 追加
+        enable_automatic_punctuation=True  # 好みで
+    )
+    streaming_config = speech.StreamingRecognitionConfig(
+        config=config, interim_results=True
+    )
 
-        # ② オーディオストリーム
-        for chunk in audio_generator:
-            yield speech_types.StreamingRecognizeRequest(audio=chunk)
+    with MicrophoneStream(RATE, CHUNK) as stream:
+        audio_gen = stream.generator()
+        requests = (speech.StreamingRecognizeRequest(audio_content=chunk)
+                    for chunk in audio_gen)
+        responses = client.streaming_recognize(streaming_config, requests)
+        listen_print_loop(responses)
 
-    # ------------------------------------------------------------------
-    # マイク入力のリアルタイム文字起こし
-    # ------------------------------------------------------------------
-    def stream_microphone(
-        self,
-        save_transcript: bool = True,
-        save_path: str = "transcript.txt",
-        interim_callback: Optional[Callable[[str], None]] = None,
-    ) -> None:
-        """
-        マイク音声をリアルタイム転写し、結果を任意で保存する。
-
-        Args:
-            save_transcript: True なら最終転写結果をファイルへ追記
-            save_path: 保存先パス
-            interim_callback: interim / final 結果を受け取る関数
-                              (引数: transcript str)。指定しなければ標準出力に表示。
-        """
-        CHUNK = int(self.sample_rate / 10)  # 100 ms
-        FORMAT = pyaudio.paInt16
-        CHANNELS = 1
-
-        audio_interface = pyaudio.PyAudio()
-        audio_stream = audio_interface.open(
-            format=FORMAT,
-            channels=CHANNELS,
-            rate=self.sample_rate,
-            input=True,
-            frames_per_buffer=CHUNK,
-        )
-
-        q: queue.Queue[bytes] = queue.Queue()
-        stop_event = threading.Event()
-
-        # --- マイク取り込みスレッド --------------------------------------
-        def _capture():
-            while not stop_event.is_set():
-                data = audio_stream.read(CHUNK, exception_on_overflow=False)
-                q.put(data)
-
-        threading.Thread(target=_capture, daemon=True).start()
-
-        # --- gRPC に渡すジェネレータ ------------------------------------
-        def _audio_gen():
-            while not stop_event.is_set():
-                chunk = q.get()
-                if chunk is None:
-                    return
-                yield chunk
-
-        # --- ストリーミング認識 -----------------------------------------
-        try:
-            responses = self.client.streaming_recognize(
-                requests=self._request_stream(_audio_gen())
-            )
-            for resp in responses:
-                for result in resp.results:
-                    transcript = result.alternatives[0].transcript
-                    # interim 表示
-                    if interim_callback:
-                        interim_callback(transcript)
-                    else:
-                        print(f"\r{transcript}", end="", flush=True)
-
-                    # final 結果なら保存
-                    if result.is_final and save_transcript:
-                        with open(save_path, "a", encoding="utf-8") as f:
-                            f.write(transcript + "\n")
-
-        finally:
-            stop_event.set()
-            q.put(None)
-            audio_stream.stop_stream()
-            audio_stream.close()
-            audio_interface.terminate()
-
-    # ------------------------------------------------------------------
-    # ローカル音声ファイルのストリーミング転写
-    # ------------------------------------------------------------------
-    def transcribe_file(self, filepath: str) -> List[str]:
-        """
-        大きなファイルでも gRPC ストリームで送り込んで転写。
-
-        Returns:
-            最終転写結果（文単位）のリスト
-        """
-        with open(filepath, "rb") as f:
-            data = f.read()
-
-        # 25 KB/メッセージ制限を考慮して分割
-        CHUNK = 25_000
-        chunks = [data[i : i + CHUNK] for i in range(0, len(data), CHUNK)]
-
-        responses = self.client.streaming_recognize(
-            requests=self._request_stream(chunks)
-        )
-
-        final_transcripts: List[str] = []
-        for resp in responses:
-            for result in resp.results:
-                if result.is_final:
-                    final_transcripts.append(result.alternatives[0].transcript)
-        return final_transcripts
+if __name__ == "__main__":
+    main()
